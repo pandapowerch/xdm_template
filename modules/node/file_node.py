@@ -4,10 +4,11 @@ FileNode 模块
 """
 
 from enum import Enum
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union, cast
 from dataclasses import dataclass
-
-from .node import ListNode
+from fnmatch import fnmatch
+from pathlib import Path
+import os
 
 
 class FileType(Enum):
@@ -19,153 +20,205 @@ class FilePathResolver:
     @staticmethod
     def normalize_path(path: str) -> str:
         """Normalize the file path to a standard format."""
-        # Replace backslashes with forward slashes for consistency
+        # 移除开头的./
+        if path.startswith("./"):
+            path = path[2:]
+        # 标准化路径
         path = path.replace("\\", "/").strip("/")
-        # Remove any leading or trailing slashes
-        path = path.replace("//", "/")  # Remove any double slashes
-        # Lowercase the path for case-insensitive comparison
+        path = path.replace("//", "/")
+        path = path.strip()
         path = path.lower()
         return path
 
 
-class __FileNode:
-    """Generic file list node class for representing files and directories in a tree structure."""
+class BaseNode:
+    """节点基类，包含文件和目录共同的属性和方法"""
 
-    def __init__(self, node_name: str, node_type: FileType):
-        self.parent: Optional["__FileNode"] = None  # parent node, None for root node
-
-        # d-list for parent's children
-        self._parent_list = ListNode()
-
-        # file name and type
-        self.name = node_name
+    def __init__(
+        self, name: str, node_type: FileType, parent: Optional["DirectoryNode"] = None
+    ):
+        self.name = name
         self.type = node_type
-
-    def set_parent(self, parent: Optional["__FileNode"]) -> None:
-        """设置父节点"""
         self.parent = parent
 
-    @staticmethod
-    def _get_ancestors(node: "__FileNode") -> List["__FileNode"]:
-        """获取节点的所有祖先节点（包括自身）"""
-        ancestors: __FileNode = []
-        current: __FileNode = node
+    def get_absolute_path(self) -> str:
+        """获取节点的绝对路径，始终以/开头"""
+        path_parts = []
+        current: Optional[BaseNode] = self
         while current:
-            ancestors.append(current)
+            if current.name:  # 只添加非空名称
+                path_parts.append(current.name)
             current = current.parent
-        return ancestors
 
-    @staticmethod
-    def get_relative_path(from_node: "__FileNode", to_node: "__FileNode") -> str:
-        """计算从一个节点到另一个节点的相对路径"""
-        relative_path = ""
-        # 获取两个节点的祖先列表
-        from_ancestors = __FileNode._get_ancestors(from_node)
-        to_ancestors = __FileNode._get_ancestors(to_node)
-        # 找到最近的公共祖先
-        common_ancestor = None
-        for ancestor in from_ancestors:
-            if ancestor in to_ancestors:
-                common_ancestor = ancestor
+        # 确保返回的路径以/开头
+        if not path_parts:
+            return "/"
+        return "/" + "/".join(reversed(path_parts))
+
+    def get_relative_path(self, from_node: "BaseNode") -> str:
+        """计算从一个节点到当前节点的相对路径"""
+        # 获取两个节点的绝对路径
+        from_parts = from_node.get_absolute_path().split("/")
+        to_parts = self.get_absolute_path().split("/")
+
+        # 找到公共前缀
+        common_prefix_len = 0
+        for i in range(min(len(from_parts), len(to_parts))):
+            if from_parts[i] != to_parts[i]:
                 break
-        if not common_ancestor:
-            relative_path = ""
-        else:
-            # 计算从from_node到common_ancestor的上级路径
-            from_distance = from_ancestors.index(common_ancestor)
-            to_distance = to_ancestors.index(common_ancestor)
-            # 向上移动到公共祖先
-            relative_path += "../" * from_distance
-            # 向下移动到目标节点
-            relative_path += "/".join(
-                ancestor.name for ancestor in to_ancestors[to_distance + 1 :]
-            )
+            common_prefix_len = i + 1
 
-        return relative_path
+        # 构建相对路径
+        up_count = len(from_parts) - common_prefix_len
+        up_path = (
+            ".."
+            if up_count == 1
+            else "../" * (up_count - 1) + ".." if up_count > 0 else ""
+        )
+        down_path = "/".join(to_parts[common_prefix_len:])
 
-    @staticmethod
-    def get_absolute_path(node: "__FileNode") -> str:
-        """获取节点的绝对路径"""
-        ancestors = __FileNode._get_ancestors(node)
-        # 反转祖先列表并提取名称
-        path_parts = [
-            ancestor.name for ancestor in reversed(ancestors) if ancestor.name
-        ]
-        # 使用斜杠连接路径部分
-        absolute_path = "/".join(path_parts)
-        return absolute_path if absolute_path else "/"
+        if up_path and down_path:
+            return up_path + "/" + down_path
+        return up_path or down_path or "."
 
 
-class DirectoryNode:
-    """List Node for Type directory"""
+class FileNode(BaseNode):
+    """文件节点"""
 
-    def __init__(self, dir_name: str):
-        self._node = __FileNode(dir_name, FileType.DIRECTORY)
-        self.children_list = ListNode()
+    def __init__(self, file_name: str, parent: Optional["DirectoryNode"] = None):
+        super().__init__(file_name, FileType.FILE, parent)
 
-    def _add_node(self, node: __FileNode) -> None:
-        """将节点添加到当前目录的子节点列表中"""
-        if not isinstance(node, __FileNode):
-            raise TypeError("Expected a __FileNode instance.")
-        # add the node to the directory's children list
-        self.children_list.insert_after(node._parent_list)
-        node.set_parent(self._node)
-
-    def _creat_node(self, node_name: str, node_type: FileType) -> "FileNode":
-        """在当前目录下创建一个文件"""
-        new_node = __FileNode(node_name, node_type)
-        self._add_node(new_node)
-        return new_node
-
-    def create_file(self, file_name: str) -> "FileNode":
-        """在当前目录下创建一个文件"""
-        return self._creat_node(file_name, FileType.FILE)
-
-    def create_directory(self, dir_name: str) -> "DirectoryNode":
-        """在当前目录下创建一个子目录"""
-        return self._creat_node(dir_name, FileType.DIRECTORY)
-
-
-class FileNode:
-    """List Node for Type file"""
-
-    def __init__(self, file_name: str):
-        self._node = __FileNode(file_name, FileType.FILE)
-
-    def isBinded(self) -> bool:
-        """检查文件是否已绑定到目录"""
-        return self._node.parent is not None
-
-    def unbind(self) -> None:
-        """解除文件与目录的绑定"""
-        if self._node.parent:
-            # 从父目录的子节点列表中移除当前文件节点
-            self._node._parent_list.remove()
-            # 清除父节点引用
-            self._node.set_parent(None)
-
-    def bind(self, directory: DirectoryNode) -> None:
-        """将文件绑定到指定目录"""
-        if not isinstance(directory, DirectoryNode):
-            raise TypeError("Expected a DirectoryNode instance.")
-
-        if self.isBinded():
-            raise ValueError(
-                f"File {self._node.name} is already bound to a directory. Unbind it first."
-            )
-
-        # 设置当前文件的父节点为目标目录
-        self._node.set_parent(directory._node)
-
-        # 将当前文件节点插入到目标目录的子节点列表中
-        directory._children_list.insert_after(self._node._parent_list)
-
-    def move_to_directory(self, directory: DirectoryNode) -> None:
+    def move_to_directory(self, directory: "DirectoryNode") -> None:
         """将文件移动到指定目录"""
         if not isinstance(directory, DirectoryNode):
             raise TypeError("Expected a DirectoryNode instance.")
-        # unbind the file from its current parent if it exists
-        self.unbind()
 
-        # bind the file to the new directory
-        self.bind(directory)
+        # 从原目录移除
+        if self.parent:
+            self.parent.children.remove(self)
+
+        # 添加到新目录
+        directory.add_child(self)
+
+
+class DirectoryNode(BaseNode):
+    """目录节点"""
+
+    def __init__(self, dir_name: str, parent: Optional["DirectoryNode"] = None):
+        super().__init__(dir_name, FileType.DIRECTORY, parent)
+        self.children: List[Union[FileNode, "DirectoryNode"]] = []
+
+    def add_child(self, node: Union[FileNode, "DirectoryNode"]) -> None:
+        """添加子节点"""
+        node.parent = self
+        self.children.append(node)
+
+    def create_file(self, file_name: str) -> FileNode:
+        """创建文件节点"""
+        file_node = FileNode(file_name, self)
+        self.add_child(file_node)
+        return file_node
+
+    def create_directory(self, dir_name: str) -> "DirectoryNode":
+        """创建子目录节点"""
+        dir_node = DirectoryNode(dir_name, self)
+        self.add_child(dir_node)
+        return dir_node
+
+    def build_tree(
+        self, tree_path: str, patterns: Optional[Union[str, List[str]]] = None
+    ) -> "DirectoryNode":
+        """构建目录树"""
+        if isinstance(patterns, str):
+            patterns = [patterns]
+
+        if not os.path.isdir(tree_path):
+            raise ValueError(f"{tree_path} is not a valid directory path.")
+
+        # 创建目录映射
+        dir_nodes: Dict[str, DirectoryNode] = {}
+        root_path = Path(tree_path).resolve()
+
+        for root, dirs, files in os.walk(tree_path):
+            current_path = Path(root).resolve()
+            rel_path = current_path.relative_to(root_path)
+            current_dir_path = str(rel_path)
+
+            # 创建或获取目录节点
+            if current_dir_path not in dir_nodes:
+                if current_dir_path == ".":
+                    current_dir = self
+                else:
+                    parent_path = str(rel_path.parent)
+                    parent_dir = dir_nodes[parent_path]
+                    current_dir = parent_dir.create_directory(rel_path.name)
+                dir_nodes[current_dir_path] = current_dir
+            else:
+                current_dir = dir_nodes[current_dir_path]
+
+            # 添加文件
+            for filename in files:
+                normalized_filename = FilePathResolver.normalize_path(filename)
+                if not patterns or any(
+                    fnmatch(normalized_filename, FilePathResolver.normalize_path(p))
+                    for p in patterns
+                ):
+                    current_dir.create_file(filename)
+
+        return self
+
+    def find_files(self, pattern: str) -> List[FileNode]:
+        """查找匹配指定模式的文件"""
+        result = []
+        normalized_pattern = FilePathResolver.normalize_path(pattern)
+
+        def _traverse(node: DirectoryNode) -> None:
+            for child in node.children:
+                if isinstance(child, FileNode) and fnmatch(
+                    FilePathResolver.normalize_path(child.name), normalized_pattern
+                ):
+                    result.append(child)
+                elif isinstance(child, DirectoryNode):
+                    _traverse(child)
+
+        _traverse(self)
+        return result
+
+    def get_node_by_path(self, path: str) -> Optional[Union[FileNode, "DirectoryNode"]]:
+        """通过路径获取节点"""
+        normalized_path = FilePathResolver.normalize_path(path)
+        parts = Path(normalized_path).parts
+        current = self
+
+        for part in parts[:-1]:
+            found = False
+            normalized_part = FilePathResolver.normalize_path(part)
+            for child in current.children:
+                if (
+                    isinstance(child, DirectoryNode)
+                    and FilePathResolver.normalize_path(child.name) == normalized_part
+                ):
+                    current = child
+                    found = True
+                    break
+            if not found:
+                return None
+
+        target = FilePathResolver.normalize_path(parts[-1])
+        for child in current.children:
+            if FilePathResolver.normalize_path(child.name) == target:
+                return child
+
+        return None
+
+    def serialize_tree(self, indent: int = 0) -> str:
+        """序列化目录树为字符串"""
+        result = [" " * indent + self.name + "/"]
+
+        for child in self.children:
+            if isinstance(child, DirectoryNode):
+                result.append(child.serialize_tree(indent + 2))
+            else:
+                result.append(" " * (indent + 2) + child.name)
+
+        return "\n".join(result)
