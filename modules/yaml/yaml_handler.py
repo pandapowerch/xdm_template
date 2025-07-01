@@ -6,6 +6,7 @@ from pathlib import Path
 from ..node.data_node import DataNode
 from ..node.file_node import DirectoryNode, FileNode
 
+
 @dataclass
 class YamlConfig:
     """YAML configuration with preserved keys for template and children paths"""
@@ -68,11 +69,13 @@ class YamlDataTreeHandler:
         """Initialize the handler with configuration"""
         self.config = YamlConfig.validate(config)
         # Initialize the yaml file tree with a root node
-        self.file_tree: DirectoryNode = DirectoryNode(dir_name=self.config.root_path.name)
+        self.file_tree: DirectoryNode = DirectoryNode(
+            dir_name=self.config.root_path.name
+        )
         self.file_tree_init()
         # Initilaze the data tree with a root node
-        self.data_tree: DataNode = DataNode(data=None, name=self.config.root_path.name)
-        self.data_tree_init()
+        self.data_tree_list: List[DataNode] = []
+        self.data_tree_list_init()
 
     @property
     def preserved_template_key(self) -> str:
@@ -84,29 +87,43 @@ class YamlDataTreeHandler:
         """Get preserved children key from config"""
         return self.config.preserved_children_key
 
+    def get_absolute_path(self, node: DataNode) -> str:
+        """Get the absolute path of the root YAML file"""
+        return str(self.config.root_path.resolve()) + node._node.get_absolute_path()
+
     def file_tree_init(self) -> None:
         """Initialize the file tree from the YAML file"""
         self.file_tree.build_tree(str(self.config.root_path), patterns=["*.yaml"])
 
-    def data_tree_init(self) -> None:
+    def data_tree_list_init(self) -> None:
         # TODO: Implement the data tree initialization
-        def _get_children_paths(node: DirectoryNode) -> List[str]:
-            """Recursively get all child paths in the directory node"""
-            paths = []
-            for child in node.children:
-                if isinstance(child, DirectoryNode):
-                    paths.append(str(child.get_absolute_path()))
-                    paths.extend(_get_children_paths(child))
-            return paths
+
+        def _tree_node_init():
+            pass
+
+        def _tree_root_init(root: FileNode) -> DataNode:
+            yaml_data = YamlFileHandler.load_yaml_file(
+                self.config.root_path + str(child.get_absolute_path())
+            )
+            if (
+                self.config.preserved_template_key not in yaml_data
+                or self.config.preserved_children_key not in yaml_data
+            ):
+                raise ValueError(
+                    f"YAML file {root.name} is missing required keys: "
+                    f"{self.config.preserved_template_key}, "
+                    f"{self.config.preserved_children_key}"
+                )
+            child_pattern: Union[List[str], str] = yaml_data.get(self.config.preserved_children_key, [])
+            sub_children = root.
+            data_node: DataNode = DataNode(data=yaml_data, name=root.name)
+
+            return data_node
+
         """Initialize the data tree from the YAML file"""
         for child in self.file_tree.children:
             if isinstance(child, FileNode):
-                # Create a DataNode for each directory
-                # Read the YAML file and create a DataNode with its data
-                yaml_data = YamlFileHandler.load_yaml_file(str(child.get_absolute_path()))
-                data_node = DataNode(data=yaml_data, name=child.name)
-                self.data_tree.add_child(data_node)
-                
+                _tree_root_init(child)
 
     def get_data(self) -> Iterator[Dict[str, Any]]:
         """Get data iterator, yielding each node's data from the tree"""

@@ -4,7 +4,7 @@ FileNode 模块
 """
 
 from enum import Enum
-from typing import Optional, List, Dict, Any, Union, cast
+from typing import Optional, List, Dict, Any, Union, cast, TypeVar, Generic
 from dataclasses import dataclass
 from fnmatch import fnmatch
 from pathlib import Path
@@ -35,7 +35,7 @@ class BaseNode:
     """节点基类，包含文件和目录共同的属性和方法"""
 
     def __init__(
-        self, name: str, node_type: FileType, parent: Optional["DirectoryNode"] = None
+        self, name: str, node_type: FileType, parent: Optional["BaseNode"] = None
     ):
         self.name = name
         self.type = node_type
@@ -44,7 +44,7 @@ class BaseNode:
     def get_absolute_path(self) -> str:
         """获取节点的绝对路径，始终以/开头"""
         path_parts = []
-        current: Optional[BaseNode] = self
+        current: Optional["BaseNode"] = self
         while current:
             if current.name:  # 只添加非空名称
                 path_parts.append(current.name)
@@ -164,52 +164,216 @@ class DirectoryNode(BaseNode):
                     for p in patterns
                 ):
                     current_dir.create_file(filename)
-
+        # 设置根节点的名称
+        # self.name = root_path.resolve()
         return self
 
-    def find_files(self, pattern: str) -> List[FileNode]:
-        """查找匹配指定模式的文件"""
-        result = []
-        normalized_pattern = FilePathResolver.normalize_path(pattern)
+    def _get_all_nodes(self) -> List[BaseNode]:
+        """获取当前目录及其子目录下的所有节点"""
+        if not isinstance(self, DirectoryNode):
+            return [self]
 
-        def _traverse(node: DirectoryNode) -> None:
-            for child in node.children:
-                if isinstance(child, FileNode) and fnmatch(
-                    FilePathResolver.normalize_path(child.name), normalized_pattern
-                ):
-                    result.append(child)
-                elif isinstance(child, DirectoryNode):
-                    _traverse(child)
-
-        _traverse(self)
+        result = [self]
+        for child in self.children:
+            if isinstance(child, DirectoryNode):
+                result.extend(child._get_all_nodes())
+            else:
+                result.append(child)
         return result
 
+    def _get_relative_paths(
+        self, base_dir: "DirectoryNode"
+    ) -> List[tuple[BaseNode, str]]:
+        """获取相对于指定目录的所有节点路径"""
+        result = []
+
+        # 获取基准路径长度（用于计算相对路径）
+        base_parts = base_dir.get_absolute_path().rstrip("/").split("/")
+        base_len = len(base_parts)
+
+        for node in self._get_all_nodes():
+            # 获取节点的绝对路径
+            abs_parts = node.get_absolute_path().split("/")
+
+            # 构建相对路径
+            if len(abs_parts) <= base_len:
+                rel_path = ""
+            else:
+                rel_path = "/".join(abs_parts[base_len:])
+
+            result.append((node, rel_path))
+
+        return result
+
+    def find_nodes_by_path(self, path_pattern: str) -> List[BaseNode]:
+        """
+        通过路径模式查找节点，支持通配符和路径导航
+
+        Args:
+            path_pattern: 路径模式，支持：
+                - 相对路径: ./config/*.yaml
+                - 父目录: ../shared/*.json
+                - 绝对路径: /root/config/*.xml
+                - 递归查找: **/test/*.py
+
+        Returns:
+            匹配的节点列表
+        """
+        result: List[BaseNode] = []
+        pattern = FilePathResolver.normalize_path(path_pattern)
+        base_directories: List[DirectoryNode] = [self]
+
+        parts = pattern.split("/")
+        last_index = len(parts) - 1
+
+        # 处理绝对路径
+        if pattern.startswith("/"):
+            # 找到根节点
+            root = self
+            while root.parent:
+                root = root.parent
+            base_directories = [root]
+            parts = parts[1:]  # 跳过空的第一个元素
+            last_index = len(parts) - 1
+
+        for index, part in enumerate(parts):
+            # 为每一层创建新的目录列表
+            next_directories: List[DirectoryNode] = []
+            
+            for base_dir in base_directories:
+                if part == ".":
+                    if index == last_index:  # 如果是最后一个部分，添加到结果
+                        result.append(base_dir)
+                    next_directories.append(base_dir)
+                    
+                elif part == "..":
+                    if base_dir.parent:
+                        if index == last_index:  # 如果是最后一个部分，添加到结果
+                            result.append(base_dir.parent)
+                        next_directories.append(base_dir.parent)
+                        
+                elif part == "**":
+                    # 收集所有子节点用于继续搜索
+                    all_nodes = base_dir._get_all_nodes()
+                    for node in all_nodes:
+                        if isinstance(node, DirectoryNode):
+                            next_directories.append(node)
+                        if index == last_index:  # 如果是最后一个部分，所有节点都是结果
+                            result.append(node)
+                            
+                else:
+                    # 常规模式匹配
+                    for child in base_dir.children:
+                        child_name = FilePathResolver.normalize_path(child.name)
+                        pattern_name = FilePathResolver.normalize_path(part)
+                        if fnmatch(child_name, pattern_name):
+                            if isinstance(child, DirectoryNode):
+                                next_directories.append(child)
+                            if index == last_index or isinstance(child, FileNode):
+                                result.append(child)
+            
+            # 更新当前搜索的目录列表
+            base_directories = list(set(next_directories))  # 去重
+            if not base_directories and index < last_index:
+                return []  # 如果中途没有找到匹配的目录，提前返回空列表
+                
+        return list(set(result))  # 返回去重后的结果
+
+    # def find_nodes_by_path(self, path_pattern: str) -> List[BaseNode]:
+    #     """
+    #     通过路径模式查找节点，支持通配符和路径导航
+
+    #     Args:
+    #         path_pattern: 路径模式，支持：
+    #             - 相对路径: ./config/*.yaml
+    #             - 父目录: ../shared/*.json
+    #             - 绝对路径: /root/config/*.xml
+    #             - 递归查找: **/test/*.py
+
+    #     Returns:
+    #         匹配的节点列表
+    #     """
+    #     if path_pattern == "":
+    #         return []
+    #     pattern = FilePathResolver.normalize_path(path_pattern)
+    #     parts = pattern.split("/")
+    #     current_nodes = [self]  # 当前层级的节点列表
+
+    #     # 处理绝对路径
+    #     if pattern.startswith("/"):
+    #         # 找到根节点
+    #         root = self
+    #         while root.parent:
+    #             root = root.parent
+    #         current_nodes = [root]
+    #         parts = parts[1:]  # 跳过空的第一个元素
+
+    #     # 逐级处理路径
+    #     for part in parts:
+    #         next_nodes = []  # 下一层级的节点列表
+
+    #         if part == "" or part == ".":
+    #             next_nodes = current_nodes[:]  # 复制当前层级节点列表
+    #             if len(parts) == 1 and (pattern == "" or pattern == "."):
+    #                 # 如果是唯一的路径组件，且模式是空或点，返回一个空名称的目录节点
+    #                 next_nodes = [DirectoryNode("")]
+
+    #         elif part == "..":
+    #             # 移动到父节点
+    #             next_nodes = []
+    #             for node in current_nodes:
+    #                 if node.parent:
+    #                     next_nodes.append(node.parent)
+    #                 else:
+    #                     return []  # 如果任何节点没有父节点，则回溯失败
+
+    #         elif part == "**":
+    #             # 收集所有节点用于后续匹配
+    #             next_nodes = []
+    #             remaining = parts[parts.index(part) + 1:]  # 获取后续模式
+    #             for node in current_nodes:
+    #                 if isinstance(node, DirectoryNode):
+    #                     # 如果是最后一个模式部分，收集所有节点
+    #                     if not remaining:
+    #                         next_nodes.extend(node._get_all_nodes())
+    #                     else:
+    #                         # 否则只收集目录节点供后续匹配
+    #                         next_nodes.append(node)
+    #                         for child in node._get_all_nodes():
+    #                             if isinstance(child, DirectoryNode):
+    #                                 next_nodes.append(child)
+
+    #         else:
+    #             # 常规模式匹配
+    #             for node in current_nodes:
+    #                 if isinstance(node, DirectoryNode):
+    #                     for child in node.children:
+    #                         # 只匹配节点名称
+    #                         child_name = FilePathResolver.normalize_path(child.name)
+    #                         pattern_name = FilePathResolver.normalize_path(part)
+    #                         if fnmatch(child_name, pattern_name):
+    #                             next_nodes.append(child)
+
+    #         current_nodes = list(dict.fromkeys(next_nodes))  # 去重
+    #         if not current_nodes:
+    #             break  # 没有找到匹配节点，提前退出
+
+    #     # 处理特殊情况的返回值
+    #     if pattern in ["", ".", "/"]:
+    #         return [DirectoryNode("")]
+
+    #     return current_nodes
+
+    # 为了保持兼容性，保留原有方法但使用新的实现
+    def find_files(self, pattern: str) -> List[FileNode]:
+        """查找匹配指定模式的文件"""
+        nodes = self.find_nodes_by_path(pattern)
+        return [cast(FileNode, node) for node in nodes if isinstance(node, FileNode)]
+
     def get_node_by_path(self, path: str) -> Optional[Union[FileNode, "DirectoryNode"]]:
-        """通过路径获取节点"""
-        normalized_path = FilePathResolver.normalize_path(path)
-        parts = Path(normalized_path).parts
-        current = self
-
-        for part in parts[:-1]:
-            found = False
-            normalized_part = FilePathResolver.normalize_path(part)
-            for child in current.children:
-                if (
-                    isinstance(child, DirectoryNode)
-                    and FilePathResolver.normalize_path(child.name) == normalized_part
-                ):
-                    current = child
-                    found = True
-                    break
-            if not found:
-                return None
-
-        target = FilePathResolver.normalize_path(parts[-1])
-        for child in current.children:
-            if FilePathResolver.normalize_path(child.name) == target:
-                return child
-
-        return None
+        """通过路径获取节点（保留用于向后兼容）"""
+        nodes = self.find_nodes_by_path(path)
+        return nodes[0] if nodes else None
 
     def serialize_tree(self, indent: int = 0) -> str:
         """序列化目录树为字符串"""
