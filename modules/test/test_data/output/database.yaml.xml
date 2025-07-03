@@ -1,0 +1,11 @@
+<database-service>
+    <info>
+        <name>Database Service</name>
+        <type>postgresql</type>
+        <port>5432</port>
+        <enabled>True</enabled>
+    </info>
+    <config>
+        <max-connections>100</max-connections>
+    </config>
+</database-service>
