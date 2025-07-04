@@ -6,8 +6,19 @@ This module defines the `ExprNode` class, which represents an expression node in
 # from abc import ABC, abstractmethod
 
 from enum import Enum, auto
-from typing import Optional, List, Dict, Any, TypeVar, Iterable, Union, Protocol
+from typing import (
+    Optional,
+    List,
+    Dict,
+    Any,
+    TypeVar,
+    Iterable,
+    Union,
+    Protocol,
+    Callable,
+)
 from dataclasses import dataclass
+from ..jinja.user_func.func_handler import UserFunctionResolver
 
 
 class ExprNodeType(Enum):
@@ -15,6 +26,7 @@ class ExprNodeType(Enum):
     FUNCTION = auto()  # 函数调用
     EXPRESSION = auto()  # 复合表达式
     LITERAL = auto()  # 字面量常数
+    VARIABLE = auto()  # 变量
 
 
 class ExprASTNode(Protocol):
@@ -208,12 +220,20 @@ class ExprASTVisitor(Protocol):
 class ExprPrintVistor(ExprASTVisitor):
     """打印ExprAST节点的访问者"""
 
+    def __init__(self, user_function_resolver: UserFunctionResolver):
+        self.resolver: UserFunctionResolver = user_function_resolver
+
     def visit_xpath(self, node: XPathNode) -> str:
         return "/".join(part.accept(self) for part in node.parts)
 
     def visit_function(self, node: FunctionNode) -> str:
-        args_str = ", ".join(arg.accept(self) for arg in node.args)
-        return f"{node.name}({args_str})"
+        func_handler = self.resolver.get_handler(node.name)
+        # TODO:需要递归调用子节点visit!
+        if func_handler:
+            return func_handler(*[arg.accept(self) for arg in node.args])
+        else:
+            args_str = ", ".join(arg.accept(self) for arg in node.args)
+            return f"{node.name}({args_str})"
 
     def visit_expression(self, node: ExpressionNode) -> str:
         # 处理特殊运算符

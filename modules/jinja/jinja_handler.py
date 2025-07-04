@@ -1,10 +1,9 @@
-from jinja2 import Environment, FileSystemLoader, Template
-from typing import Dict, Any
+from jinja2 import Environment, FileSystemLoader, Template, pass_context
+from typing import Dict, Any, Callable, Optional
 from dataclasses import dataclass
 from pathlib import Path
 
-from .expr_filter import reverse_string
-
+from .expr_filter import expr_filter_factory
 
 @dataclass
 class JinjaConfig:
@@ -70,14 +69,26 @@ class JinjaTemplateHandler:
             keep_trailing_newline=True,  # 保留文件末尾的换行
         )
 
-        self.env.filters["reverse_string"] = reverse_string
+        # self.register_filter("expr_filter", expr_filter_factory("Expr Filter: "))  # 注册默认过滤器
+        
+    def register_filter(self, name: str, func: Callable) -> None:
+        """注册自定义过滤器
 
-    def render_template(self, template_path: str, context: Dict[str, Any]) -> str:
+        Args:
+            name: 过滤器名称
+            func: 过滤器函数
+        """
+        self.env.filters[name] = func
+    
+    def render_template(
+        self, template_path: str, data: Dict[str, Any], filters: Optional[Dict[str, Callable]] = None
+    ) -> str:
         """渲染模板
 
         Args:
             template_path: 模板文件路径（相对于template_dir）
-            context: 渲染上下文数据
+            data: 渲染上下文数据
+            resolver: 可选的解析器字典，用于注册额外的过滤器
 
         Returns:
             str: 渲染结果
@@ -86,5 +97,23 @@ class JinjaTemplateHandler:
             jinja2.TemplateNotFound: 如果模板不存在
             jinja2.TemplateError: 如果渲染过程出错
         """
-        template = self.env.get_template(template_path)
-        return template.render(context)
+        if filters:
+            # 保存当前的过滤器字典（浅拷贝）
+            original_filters = self.env.filters.copy()
+            try:
+                # 注册新的过滤器
+                for key, value in filters.items():
+                    self.register_filter(key, value)
+                template = self.env.get_template(template_path)
+                return template.render(data)
+            finally:
+                # 无论是否发生异常，都恢复原始过滤器
+                self.env.filters = original_filters
+        else:
+            template = self.env.get_template(template_path)
+            return template.render(data)
+        # if resolver:
+        #     for key, value in resolver.items():
+        #         self.register_filter(key, value)
+        # template = self.env.get_template(template_path)
+        # return template.render(data)

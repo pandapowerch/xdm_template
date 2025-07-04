@@ -187,7 +187,7 @@ class YamlDataTreeHandler(DataHandler):
                 self.config.max_depth, file_node.name
             )
 
-        file_system_path: str = self.file_tree.name + file_node.get_absolute_path()
+        file_system_path: str = str(self.config.root_path) + file_node.get_absolute_path(slice_range=(1, None))
         data = _YamlFileHandler._load_yaml_file(file_system_path)
         if data:
             # 创建数据节点并存入映射

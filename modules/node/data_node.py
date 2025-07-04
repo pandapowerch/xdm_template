@@ -39,3 +39,8 @@ class DataNode(DirectoryNode["DataNode"]):
         """深度优先遍历，获取所有数据节点的数据"""
         for node in self.iter_data_nodes():
             yield node.data
+
+    from ..jinja.user_func.func_handler import (
+        UserFunctionResolver,
+        UserFunctionInfo,
+    )

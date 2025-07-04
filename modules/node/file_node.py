@@ -4,7 +4,7 @@ FileNode 模块
 """
 
 from enum import Enum
-from typing import Optional, List, Dict, Any, Union, cast, TypeVar, Generic
+from typing import Optional, List, Dict, Any, Union, cast, TypeVar, Generic, Tuple
 from dataclasses import dataclass
 from fnmatch import fnmatch
 from pathlib import Path
@@ -43,19 +43,40 @@ class BaseNode(Generic[T]):
         self.type = node_type
         self.parent = parent
 
-    def get_absolute_path(self) -> str:
-        """获取节点的绝对路径，始终以/开头"""
-        path_parts = []
+    def get_absolute_path(self, slice_range: Tuple[int, int] = (0, None)) -> str:
+        """获取节点的绝对路径，始终以/开头
+        
+        Args:
+            slice_range: 路径切片范围 (起始索引, 结束索引)，遵循Python切片规则
+                        默认为(0, None)表示完整路径
+        
+        Returns:
+            节点的绝对路径字符串
+        """
+        # 1. 收集路径节点名称
+        path_names = []
         current: Optional["BaseNode"] = self
+        
+        # 从当前节点向上遍历到根节点
         while current:
-            if current.name and current.parent:  # 只添加非空名称同时根节点名称不添加
-                path_parts.append(current.name)
+            # 跳过根节点（如果根节点名称为空）
+            if current.name:
+                path_names.append(current.name)
             current = current.parent
-
-        # 确保返回的路径以/开头
-        if not path_parts:
+        
+        # 反转列表，使顺序变为从根节点到当前节点
+        path_names.reverse()
+        
+        # 2. 应用切片范围
+        start, end = slice_range
+        sliced_names = path_names[start:end]
+        
+        # 3. 构建路径字符串
+        if not sliced_names:
             return "/"
-        return "/" + "/".join(reversed(path_parts))
+        
+        # 创建路径：/root/parent/current
+        return "/" + "/".join(sliced_names)
 
     def get_relative_path(self, from_node: "BaseNode") -> str:
         """计算从一个节点到当前节点的相对路径"""

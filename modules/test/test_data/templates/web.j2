@@ -1,9 +1,13 @@
 <web-service>
     <info>
-        <name>{{ name | reverse_string }}</name>
+        <name>{{ name }}</name>
         <type>{{ type }}</type>
         <port>{{ port }}</port>
         <enabled>{{ enabled }}</enabled>
+        {#<expr0>{{ expr0 | expr_filter }}</expr0>
+        <expr1>{{ expr1 | expr_filter }}</expr1>
+        <expr2>{{ expr2 | expr_filter }}</expr2>#}
+        <expr3>{{ expr3 | expr_filter }}</expr3>
     </info>
     <endpoints>
         {{ CHILDREN_CONTEXT }}
