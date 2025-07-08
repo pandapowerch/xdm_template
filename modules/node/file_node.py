@@ -297,7 +297,7 @@ class DirectoryNode(BaseNode[T]):
                         if fnmatch(child_name, pattern_name):
                             if isinstance(child, DirectoryNode):
                                 next_directories.append(child)
-                            if index == last_index and isinstance(child, FileNode):
+                            if index == last_index:
                                 result.append(child)
 
             # 更新当前搜索的目录列表

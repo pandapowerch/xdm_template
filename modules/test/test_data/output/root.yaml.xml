@@ -10,24 +10,12 @@
         <subsystem>Database</subsystem>
     </subsystems>
     <services>
-        <database-service>
-            <info>
-                <name>Database Service</name>
-                <type>postgresql</type>
-                <port>5432</port>
-                <enabled>True</enabled>
-            </info>
-            <config>
-                <max-connections>100</max-connections>
-            </config>
-        </database-service>
         <web-service>
             <info>
                 <name>Web Service</name>
                 <type>http</type>
                 <port>8080</port>
                 <enabled>True</enabled>
-                <expr3>web.yaml</expr3>
             </info>
             <endpoints>
                 <endpoint>
@@ -42,5 +30,16 @@
                 </endpoint>
             </endpoints>
         </web-service>
+        <database-service>
+            <info>
+                <name>Database Service</name>
+                <type>postgresql</type>
+                <port>5432</port>
+                <enabled>True</enabled>
+            </info>
+            <config>
+                <max-connections>100</max-connections>
+            </config>
+        </database-service>
     </services>
 </system>

@@ -13,6 +13,18 @@ from typing import (
 )
 from pathlib import Path
 from ..node.data_node import DataNode
+from ..jinja.user_func.func_handler import UserFunctionResolver
+
+
+@runtime_checkable
+class UserFunctionResolverGenerator(Protocol):
+    """Protocol for UserFunctionResolver
+    当前DataDrivenGenerator所提供的构建Resolver时可以提供的上下文
+    """
+
+    def create_resolver(self, node: DataNode) -> UserFunctionResolver:
+        """DataDrivenGenerator will call this function when itering the data tree"""
+        ...
 
 
 @runtime_checkable
@@ -48,8 +60,8 @@ class DataHandler(Protocol):
         """
         ...
 
-    def get_data_nodes(self, pattern: str) -> List[DataNode]:
-        """根据文件路径模式查找数据节点
+    def find_by_file_path(self, node: DataNode, pattern: str) -> List[DataNode]:
+        """根据 文件 路径模式查找数据节点
 
         Args:
             pattern: 文件路径模式，如 "*.yaml" 或 "**/config/*.yaml"

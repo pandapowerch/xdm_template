@@ -21,6 +21,7 @@ expr3:
   type: "function"
   args:
     [
-      "node:get_name",
+      "node:get_attr",
       { "type": "function", "args": [node:get_rel, "./database.yaml"] },
+      "name"
     ]

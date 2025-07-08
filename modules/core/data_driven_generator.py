@@ -43,6 +43,9 @@ class DataDrivenGenerator:
         self.template_handler = HandlerFactory.create_template_handler(
             config.template_type, config.template_config
         )
+        from ..jinja.user_func.resolver import UserFunctionResolverFactory
+        self.resolver_factory = UserFunctionResolverFactory()
+        
         # 存储渲染结果的映射
         self._rendered_contents: Dict[DataNode, str] = {}
 
@@ -114,6 +117,7 @@ class DataDrivenGenerator:
         )
 
         try:
+            template_path = node.data[self.data_handler.preserved_template_key]
             # Dynamic create resolver for DataNode
             node_resolver = self._create_node_resolver(node)
 
@@ -124,7 +128,6 @@ class DataDrivenGenerator:
             filters = {"expr_filter": expr_filter_factory(node_resolver)}
 
             # 6. 渲染模板
-            template_path = node.data[self.data_handler.preserved_template_key]
             result = self.template_handler.render_template(
                 template_path, data, filters=filters
             )
@@ -144,77 +147,10 @@ class DataDrivenGenerator:
 
         Args:
             node: 当前处理的节点
-
         Returns:
             UserFunctionResolver: 节点特定的函数解析器
         """
-        # 1. 创建节点特定的函数列表
-        node_functions = [
-            # 基本节点信息函数
-            UserFunctionInfo(
-                name="node:name",
-                arg_range=[0, 0],
-                description="Get current node name",
-                handler=lambda: node.name,
-            ),
-            UserFunctionInfo(
-                name="node:path",
-                arg_range=[0, 0],
-                description="Get node depth in the tree",
-                handler=lambda: node.get_absolute_path(),
-            ),
-            UserFunctionInfo(
-                name="node:get_rel",
-                arg_range=[1, 1],
-                description="Get node depth in the tree",
-                handler=lambda x: node.get_node_by_path(x),
-            ),
-            UserFunctionInfo(
-                name="node:get_name",
-                arg_range=[0, 1],
-                description="Get node depth in the tree",
-                handler=lambda x=None: str(node.name) if x is None else x.name,
-            ),
-            # 示例函数：双倍值
-            UserFunctionInfo(
-                name="user:double",
-                arg_range=[1, 1],
-                description="Double the input value",
-                handler=lambda x: 2 * x.value,
-            ),
-        ]
-
-        # # 2. 添加节点数据相关函数
-        # if "value" in node.data:
-        #     node_functions.append(
-        #         UserFunctionInfo(
-        #             name="data:value",
-        #             arg_range=[0, 0],
-        #             description="Get node's value",
-        #             handler=lambda: node.data["value"],
-        #         )
-        #     )
-
-        # # 3. 添加子节点相关函数
-        # if node.children:
-        #     node_functions.extend(
-        #         [
-        #             UserFunctionInfo(
-        #                 name="children:count",
-        #                 arg_range=[0, 0],
-        #                 description="Get children count",
-        #                 handler=lambda: len(node.children),
-        #             ),
-        #             UserFunctionInfo(
-        #                 name="children:names",
-        #                 arg_range=[0, 0],
-        #                 description="Get children names",
-        #                 handler=lambda: [
-        #                     c.name for c in node.children if isinstance(c, DataNode)
-        #                 ],
-        #             ),
-        #         ]
-        #     )
-
-        # 4. 创建并返回解析器
-        return UserFunctionResolver(node_functions)
+        
+        return self.resolver_factory.create_resolver(node, self.data_handler)
+    
+        

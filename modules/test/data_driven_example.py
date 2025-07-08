@@ -184,6 +184,7 @@ def demonstrate_generator():
         print("\n=== Initializing Generator ===")
         generator = DataDrivenGenerator(config)
         
+        print(generator.resolver_factory.show_function_info())
         # 4. 渲染配置树
         print("\n=== Rendering Config Tree ===")
         try:

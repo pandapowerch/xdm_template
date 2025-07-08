@@ -14,6 +14,7 @@ from ..node.data_node import DataNode
 from ..node.file_node import DirectoryNode, FileNode
 from ..core import DataHandler
 
+
 @dataclass
 class YamlConfig:
     """YAML配置，包含模板和子节点路径的保留键"""
@@ -37,7 +38,7 @@ class YamlConfig:
                     - encoding: 文件编码 (默认: utf-8)
                     - preserved_template_key: 模板路径键名 (默认: TEMPLATE_PATH)
                     - preserved_children_key: 子节点路径键名 (默认: CHILDREN_PATH)
-                    
+
         Raises:
             YamlConfigError: 如果缺少必需字段
             YamlPathError: 如果根路径不存在
@@ -61,19 +62,20 @@ class YamlConfig:
             ),
         )
 
+
 class _YamlFileHandler:
     """内部使用的YAML文件处理类"""
-    
+
     @staticmethod
     def _load_yaml_file(yaml_path: str) -> dict:
         """加载YAML文件并返回字典数据
-        
+
         Args:
             yaml_path: YAML文件的路径
-            
+
         Returns:
             dict: YAML文件的内容
-            
+
         Raises:
             YamlLoadError: 如果文件不存在或格式错误
         """
@@ -86,29 +88,36 @@ class _YamlFileHandler:
         except (IOError, yaml.YAMLError) as e:
             raise YamlLoadError(str(e), yaml_path)
 
+
 class YamlDataTreeHandler(DataHandler):
     """YAML数据树处理器
-    
+
     实现了DataHandler协议的YAML处理器，提供以下功能：
     - create_data_tree: 从指定模式创建YAML数据树
     - get_data_nodes: 根据文件路径模式查找数据节点
     - get_absolute_path: 获取节点的绝对路径
-    
+
     主要用于管理YAML配置文件的层级结构，支持模板引用和子节点包含。
     """
 
     def __init__(self, config: Dict[str, Any]) -> None:
         """初始化处理器
-        
+
         Args:
             config: 配置字典，参见YamlConfig的文档
-            
+
         Raises:
             YamlConfigError: 配置验证失败
         """
         self.config = YamlConfig.validate(config)
         self._node_paths: List[str] = []  # 用于检测循环引用
-        self._path_mapping: Dict[str, DataNode] = {}  # 文件路径到数据节点的映射
+        # self._path_mapping: Dict[str, DataNode] = {}  # 文件路径到数据节点的映射
+
+        # DataNode 映射到 FileNode
+        self._file_node_mapping: Dict[DataNode, FileNode] = {}
+
+        # FileNode 映射到 DataNode
+        self._data_node_mapping: Dict[FileNode, DataNode] = {}
 
         # 初始化文件树
         self.file_tree: DirectoryNode = DirectoryNode(
@@ -126,12 +135,20 @@ class YamlDataTreeHandler(DataHandler):
         """获取子节点路径的键名"""
         return self.config.preserved_children_key
 
+    def _add_mapping(self, data_node: DataNode, file_node: FileNode) -> None:
+        self._file_node_mapping[data_node] = file_node
+        self._data_node_mapping[file_node] = data_node
+
+    def _clear_mapping(self) -> None:
+        self._file_node_mapping.clear()
+        self._data_node_mapping.clear()
+
     def get_absolute_path(self, node: DataNode) -> str:
-        """获取节点的绝对路径
-        
+        """获取节点的文件绝对路径
+
         Args:
             node: 数据节点
-            
+
         Returns:
             str: 节点的绝对路径
         """
@@ -139,7 +156,7 @@ class YamlDataTreeHandler(DataHandler):
 
     def _file_tree_init(self) -> None:
         """初始化文件树结构
-        
+
         根据配置的根路径和文件模式构建文件树。
         不直接访问此方法，它由__init__自动调用。
         """
@@ -147,37 +164,38 @@ class YamlDataTreeHandler(DataHandler):
             str(self.config.root_path), patterns=self.config.file_pattern
         )
 
-    def get_data_nodes(self, pattern: str) -> List[DataNode]:
+    def find_by_file_path(self, node: DataNode, pattern: str) -> List[DataNode]:
         """根据文件路径模式查找数据节点
-        
+
         Args:
             pattern: 文件路径模式，如 "*.yaml" 或 "**/config/*.yaml"
-            
+
         Returns:
             List[DataNode]: 匹配的数据节点列表
         """
-        file_nodes = self.file_tree.find_nodes_by_path(pattern)
-        result = []
-        
-        for node in file_nodes:
+        # Get file node from mapping
+        file_node: Optional[FileNode] = self._file_node_mapping.get(node, None)
+        if file_node is None:
+            pass
+
+        found_node = cast(DirectoryNode, file_node.parent).find_nodes_by_path(pattern)
+        result: List[DataNode] = []
+        for node in found_node:
             if isinstance(node, FileNode):
-                abs_path = node.get_absolute_path()
-                data_node = self._path_mapping.get(abs_path)
-                if data_node:
-                    result.append(data_node)
-        
+                # Get data node from mapping
+                result.append(self._data_node_mapping.get(node))
         return result
 
     def _data_node_create(self, file_node: FileNode, depth: int) -> DataNode:
         """从文件节点创建数据节点
-        
+
         Args:
             file_node: 文件节点
             depth: 当前递归深度
-            
+
         Returns:
             DataNode: 创建的数据节点
-            
+
         Raises:
             YamlStructureError: 如果递归深度超限或缺少必要字段
             YamlLoadError: 如果文件加载失败
@@ -186,14 +204,19 @@ class YamlDataTreeHandler(DataHandler):
             raise YamlStructureError.max_depth_exceeded(
                 self.config.max_depth, file_node.name
             )
-
-        file_system_path: str = str(self.config.root_path) + file_node.get_absolute_path(slice_range=(1, None))
+        # TODO: 将DataNode与FileNode建立映射，以便进行文件级别的find_pattern
+        file_system_path: str = str(
+            self.config.root_path
+        ) + file_node.get_absolute_path(slice_range=(1, None))
         data = _YamlFileHandler._load_yaml_file(file_system_path)
         if data:
             # 创建数据节点并存入映射
             data_node = DataNode(data=data, name=file_node.name)
-            self._path_mapping[file_node.get_absolute_path()] = data_node
-            
+            # self._path_mapping[file_node.get_absolute_path()] = data_node
+
+            # Add data node to file node mapping
+            self._add_mapping(data_node, file_node)
+
             # 验证必要字段
             for key in [self.preserved_template_key, self.preserved_children_key]:
                 if key not in data:
@@ -237,18 +260,19 @@ class YamlDataTreeHandler(DataHandler):
 
     def create_data_tree(self, pattern: str) -> List[DataNode]:
         """从文件模式创建数据树
-        
+
         Args:
             pattern: 文件路径模式，如 "root.yaml" 或 "**/root/*.yaml"
-            
+
         Returns:
             List[DataNode]: 匹配模式的数据树列表
-            
+
         Raises:
             YamlError: 如果树创建过程中出现错误
         """
         # 重置状态
-        self._path_mapping.clear()
+        # self._path_mapping.clear()
+        self._clear_mapping()
         data_tree_list = []
 
         if len(self.file_tree.children) == 0:

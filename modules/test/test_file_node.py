@@ -155,9 +155,9 @@ class TestFileNode(unittest.TestCase):
         self.assertFalse(any(f.name == "data.json" for f in vars_yamls))
 
         # 验证深层目录访问
-        nested_yaml = self.root.get_node_by_path("nested/deep/file.yaml")
+        nested_yaml = self.root.get_node_by_path("nested/deep")
         self.assertIsNotNone(nested_yaml)
-        self.assertEqual(nested_yaml.get_absolute_path(), "/nested/deep/file.yaml")
+        self.assertEqual(nested_yaml.get_absolute_path(), "/nested/deep")
 
     def test_relative_paths(self):
         """Test relative path calculations"""

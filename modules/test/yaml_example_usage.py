@@ -41,7 +41,13 @@ def demonstrate_yaml_handler():
         
         for pattern in patterns:
             print(f"\n=== Finding Data Nodes ({pattern}) ===")
-            nodes = handler.get_data_nodes(pattern)
+            nodes = data_trees[0].find_nodes_by_path(pattern)
+            print(f"Found {len(nodes)} nodes:")
+            for node in nodes:
+                print(f"- {node.name}: {node.data}")
+                
+            print(f"\n=== Finding Data Nodes By File Path ({pattern}) ===")
+            nodes = handler.find_by_file_path(data_trees[0], pattern)
             print(f"Found {len(nodes)} nodes:")
             for node in nodes:
                 print(f"- {node.name}: {node.data}")
