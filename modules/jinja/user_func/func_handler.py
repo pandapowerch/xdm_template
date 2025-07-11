@@ -28,7 +28,7 @@ class UserFunctionInfo:
     """用户定义函数信息"""
 
     name: str
-    arg_range: tuple[int, int]
+    arg_range: tuple
     description: str
     handler: Callable
 

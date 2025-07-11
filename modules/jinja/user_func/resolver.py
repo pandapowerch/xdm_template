@@ -35,7 +35,7 @@ class FunctionPlugin:
 
 # 增强版工厂类
 class UserFunctionResolverFactory:
-    def __init__(self, plugins_dir: str = Path(__file__).parent / "plugins"):
+    def __init__(self, plugins_dir: str = str(Path(__file__).parent / "plugins")):
         self.plugins_dir = plugins_dir
         self.plugin_classes: List[Type[FunctionPlugin]] = []
         self.static_functions: Dict[str, UserFunctionInfo] = {}

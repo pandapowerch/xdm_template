@@ -1,0 +1,6 @@
+TEMPLATE: template.j2
+CHILDREN:
+
+expr:
+  type: xpath
+  args: [a, b, c, d, e, f, g]

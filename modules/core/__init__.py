@@ -14,6 +14,7 @@ from typing import (
 from pathlib import Path
 from ..node.data_node import DataNode
 from ..jinja.user_func.func_handler import UserFunctionResolver
+from modules.node.file_node import DirectoryNode
 
 
 @runtime_checkable
@@ -36,6 +37,9 @@ class DataHandler(Protocol):
     - get_data_nodes: 根据文件路径模式查找数据节点
     - get_absolute_path: 获取节点的绝对路径
     """
+
+    file_tree: DirectoryNode  # 文件树
+    config: Dict[str, Any]  # 配置
 
     @property
     def preserved_template_key(self) -> str:
@@ -97,17 +101,14 @@ class TemplateHandler(Protocol):
         ...
 
     def render_template(
-        self,
-        template_path: str,
-        data: Dict[str, Any],
-        resolver: Optional[Dict[str, Callable]],
+        self, template_path: str, node: DataNode, data_handler: DataHandler
     ) -> str:
         """Render a template with data
 
         Args:
             template_path: Path to the template file
             data: Data to render the template with
-
+            filters: Used for
         Returns:
             str: The rendered template
         """

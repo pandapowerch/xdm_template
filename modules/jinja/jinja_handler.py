@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .expr_filter import expr_filter_factory
+from modules.node.data_node import DataNode
+from modules.core import DataHandler
+
 
 @dataclass
 class JinjaConfig:
@@ -68,9 +71,13 @@ class JinjaTemplateHandler:
             lstrip_blocks=True,  # 移除块级标签前的空白
             keep_trailing_newline=True,  # 保留文件末尾的换行
         )
+        from ..jinja.user_func.resolver import UserFunctionResolverFactory
 
+        self.resolver_factory = UserFunctionResolverFactory()
+
+        print(self.resolver_factory.show_function_info())
         # self.register_filter("expr_filter", expr_filter_factory("Expr Filter: "))  # 注册默认过滤器
-        
+
     def register_filter(self, name: str, func: Callable) -> None:
         """注册自定义过滤器
 
@@ -79,9 +86,9 @@ class JinjaTemplateHandler:
             func: 过滤器函数
         """
         self.env.filters[name] = func
-    
+
     def render_template(
-        self, template_path: str, data: Dict[str, Any], filters: Optional[Dict[str, Callable]] = None
+        self, template_path: str, node: DataNode, data_handler: DataHandler
     ) -> str:
         """渲染模板
 
@@ -97,6 +104,12 @@ class JinjaTemplateHandler:
             jinja2.TemplateNotFound: 如果模板不存在
             jinja2.TemplateError: 如果渲染过程出错
         """
+        node_resolver = self.resolver_factory.create_resolver(node, data_handler)
+        
+        filters = {"expr_filter": expr_filter_factory(node_resolver)}
+        
+        data = node.data  # 获取节点数据
+        
         if filters:
             # 保存当前的过滤器字典（浅拷贝）
             original_filters = self.env.filters.copy()

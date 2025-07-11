@@ -29,6 +29,6 @@ for name, data in sample_data.items():
     ast_nodes[name] = parser.parse(data)
 
 # 打印AST
-printer = ExprPrintVistor()
+printer = ExprPrintVistor(None)
 for name, node in ast_nodes.items():
     print(f"{name}: {node.accept(printer)}")

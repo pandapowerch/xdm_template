@@ -31,7 +31,10 @@ class DataDrivenGenerator:
     This class is responsible for generating data-driven templates based on provided data.
     """
 
-    def __init__(self, config: DataDrivenGeneratorConfig) -> None:
+    def __init__(
+        self,
+        config: DataDrivenGeneratorConfig,
+    ) -> None:
         """Initialize the generator with configuration
 
         Args:
@@ -43,9 +46,7 @@ class DataDrivenGenerator:
         self.template_handler = HandlerFactory.create_template_handler(
             config.template_type, config.template_config
         )
-        from ..jinja.user_func.resolver import UserFunctionResolverFactory
-        self.resolver_factory = UserFunctionResolverFactory()
-        
+
         # 存储渲染结果的映射
         self._rendered_contents: Dict[DataNode, str] = {}
 
@@ -119,17 +120,17 @@ class DataDrivenGenerator:
         try:
             template_path = node.data[self.data_handler.preserved_template_key]
             # Dynamic create resolver for DataNode
-            node_resolver = self._create_node_resolver(node)
+            # node_resolver = self._create_node_resolver(node)
 
-            from ..jinja.expr_filter import expr_filter_factory
+            # from ..jinja.expr_filter import expr_filter_factory
 
             # Currently only create expr filter
             # TODO: Maybe need extent?
-            filters = {"expr_filter": expr_filter_factory(node_resolver)}
+            # filters = {"expr_filter": expr_filter_factory(node_resolver)}
 
             # 6. 渲染模板
             result = self.template_handler.render_template(
-                template_path, data, filters=filters
+                template_path, node, self.data_handler
             )
 
             # 7. 验证结果并保存
@@ -142,15 +143,13 @@ class DataDrivenGenerator:
                 f"Failed to render {template_path}: {str(e)}",
             )
 
-    def _create_node_resolver(self, node: DataNode) -> UserFunctionResolver:
-        """为当前节点创建独立的函数解析器
+    # def _create_node_resolver(self, node: DataNode) -> UserFunctionResolver:
+    #     """为当前节点创建独立的函数解析器
 
-        Args:
-            node: 当前处理的节点
-        Returns:
-            UserFunctionResolver: 节点特定的函数解析器
-        """
-        
-        return self.resolver_factory.create_resolver(node, self.data_handler)
-    
-        
+    #     Args:
+    #         node: 当前处理的节点
+    #     Returns:
+    #         UserFunctionResolver: 节点特定的函数解析器
+    #     """
+
+    #     return self.resolver_factory.create_resolver(node, self.data_handler)

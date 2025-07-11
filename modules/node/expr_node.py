@@ -32,11 +32,13 @@ class ExprNodeType(Enum):
 class ExprASTNode(Protocol):
     """抽象语法树节点基类"""
 
+    source: Optional[Dict]
+
     def __init__(self, source: Optional[Dict] = None):
         # 保留原始字典数据用于调试和错误报告
-        self.source = source
+        self.source: Optional[Dict] = source
 
-    def accept(self, visitor: "ExprASTVisitor"):
+    def accept(self, visitor: "ExprASTVisitor") -> Any:
         """访问者模式接受方法"""
         pass
 
@@ -48,7 +50,7 @@ class XPathNode(ExprASTNode):
         super().__init__(source)
         self.parts = parts  # 可以是字符串或嵌套节点
 
-    def accept(self, visitor: "ExprASTVisitor"):
+    def accept(self, visitor: "ExprASTVisitor") -> Any:
         return visitor.visit_xpath(self)
 
 
@@ -266,41 +268,41 @@ class ExprPrintVistor(ExprASTVisitor):
         return str(node.value)
 
 
-class ExprValidater(ExprASTVisitor):
-    """节点有效性检查器"""
+# class ExprValidater(ExprASTVisitor):
+#     """节点有效性检查器"""
 
-    def __init__(self):
-        self.errors = []
+#     def __init__(self):
+#         self.errors = []
 
-    def visit_xpath(self, node: XPathNode) -> bool:
-        is_valid: bool = True
-        for part in node.parts:
-            if part.accept(self) is False:
-                is_valid = False
-                break
-        return is_valid
+#     def visit_xpath(self, node: XPathNode) -> bool:
+#         is_valid: bool = True
+#         for part in node.parts:
+#             if part.accept(self) is False:
+#                 is_valid = False
+#                 break
+#         return is_valid
 
-    def visit_function(self, node: FunctionNode) -> bool:
-        # 这里可以添加特定函数的类型检查规则
-        for arg in node.args:
-            arg.accept(self)
+#     def visit_function(self, node: FunctionNode) -> bool:
+#         # 这里可以添加特定函数的类型检查规则
+#         for arg in node.args:
+#             arg.accept(self)
 
-        # 示例：检查node:value函数参数数量
-        if node.name == "node:value" and len(node.args) != 1:
-            self.errors.append(f"函数 {node.name} 需要1个参数，但得到 {len(node.args)}")
+#         # 示例：检查node:value函数参数数量
+#         if node.name == "node:value" and len(node.args) != 1:
+#             self.errors.append(f"函数 {node.name} 需要1个参数，但得到 {len(node.args)}")
 
-    def visit_expression(self, node: ExpressionNode):
-        # 检查操作数类型是否兼容
-        operand_types = [op.accept(self) for op in node.operands]
+#     def visit_expression(self, node: ExpressionNode):
+#         # 检查操作数类型是否兼容
+#         operand_types = [op.accept(self) for op in node.operands]
 
-        # 示例：检查比较运算符的操作数类型
-        if node.operator in ["=", "!=", "<", ">"]:
-            if len(operand_types) != 2:
-                self.errors.append(f"比较运算符 '{node.operator}' 需要2个操作数")
-            elif operand_types[0] != operand_types[1]:
-                self.errors.append(
-                    f"类型不匹配: {operand_types[0]} 和 {operand_types[1]}"
-                )
+#         # 示例：检查比较运算符的操作数类型
+#         if node.operator in ["=", "!=", "<", ">"]:
+#             if len(operand_types) != 2:
+#                 self.errors.append(f"比较运算符 '{node.operator}' 需要2个操作数")
+#             elif operand_types[0] != operand_types[1]:
+#                 self.errors.append(
+#                     f"类型不匹配: {operand_types[0]} 和 {operand_types[1]}"
+#                 )
 
-    def visit_literal(self, node: LiteralNode) -> str:
-        return node.data_type
+#     def visit_literal(self, node: LiteralNode) -> str:
+#         return node.data_type
