@@ -1,6 +1,6 @@
 """Data-driven generator module for Jinja Template"""
 
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Union
 from dataclasses import dataclass
 from . import (
     GeneratorError,
@@ -107,13 +107,15 @@ class DataDrivenGenerator:
         data = node.data
 
         # 4. 收集子节点渲染结果
-        children_content: List[str] = []
+        children_content: Union[List[str], Dict[str, str], str] = []
+        
+        
         for child in node.children:
             if isinstance(child, DataNode) and child in self._rendered_contents:
                 children_content.append(self._rendered_contents[child])
 
         # 5. 添加子节点内容到上下文
-        data[self.template_handler.config.preserved_children_key] = "\n".join(
+        data[self.template_handler.preserved_children_key] = "\n".join(
             children_content
         )
 

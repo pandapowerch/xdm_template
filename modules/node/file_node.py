@@ -43,7 +43,7 @@ class BaseNode(Generic[T]):
         self.type = node_type
         self.parent = parent
 
-    def get_absolute_path(self, slice_range: Tuple[int, int] = (0, None)) -> str:
+    def get_absolute_path(self, slice_range: Tuple = (0, None)) -> str:
         """获取节点的绝对路径，始终以/开头
         
         Args:

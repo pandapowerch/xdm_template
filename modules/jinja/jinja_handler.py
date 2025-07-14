@@ -78,6 +78,10 @@ class JinjaTemplateHandler:
         print(self.resolver_factory.show_function_info())
         # self.register_filter("expr_filter", expr_filter_factory("Expr Filter: "))  # 注册默认过滤器
 
+    @property
+    def preserved_children_key(self) -> str:
+        return self.config.preserved_children_key
+
     def register_filter(self, name: str, func: Callable) -> None:
         """注册自定义过滤器
 
@@ -105,11 +109,11 @@ class JinjaTemplateHandler:
             jinja2.TemplateError: 如果渲染过程出错
         """
         node_resolver = self.resolver_factory.create_resolver(node, data_handler)
-        
+
         filters = {"expr_filter": expr_filter_factory(node_resolver)}
-        
+
         data = node.data  # 获取节点数据
-        
+
         if filters:
             # 保存当前的过滤器字典（浅拷贝）
             original_filters = self.env.filters.copy()

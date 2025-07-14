@@ -5,12 +5,14 @@ This module defines the `ExprNode` class, which represents an expression node in
 
 # from abc import ABC, abstractmethod
 
+# from curses.ascii import SUB
 from enum import Enum, auto
 from typing import (
     Optional,
     List,
     Dict,
     Any,
+    Type,
     TypeVar,
     Iterable,
     Union,
@@ -26,7 +28,7 @@ class ExprNodeType(Enum):
     FUNCTION = auto()  # 函数调用
     EXPRESSION = auto()  # 复合表达式
     LITERAL = auto()  # 字面量常数
-    VARIABLE = auto()  # 变量
+    # VARIABLE = auto()  # 变量
 
 
 class ExprASTNode(Protocol):
@@ -71,18 +73,25 @@ class FunctionNode(ExprASTNode):
 class ExpressionOperator(Enum):
     """表达式操作符枚举"""
 
-    ADD = auto()  # 加法
-    SUBTRACT = auto()  # 减法
-    MULTIPLY = auto()  # 乘法
-    DIVIDE = auto()  # 除法
-    CONCATENATE = auto()  # 字符串连接
-    EQUALS = auto()  # 等于
-    NOT_EQUALS = auto()  # 不等于
-    LESS_THAN = auto()  # 小于
-    GREATER_THAN = auto()  # 大于
-    AND = auto()  # 与
-    OR = auto()  # 或
+    ADD = "+"
+    SUB = "-"
+    MUL = "*"
+    DIV = "/"
+    MOD = "%"
+    AND = "&&"
+    OR = "||"
+    NOT = "!"
+    EQ = "=="
+    NEQ = "!="
+    LT = "<"
+    GT = ">"
+    LE = "<="
+    GE = ">="
 
+
+    def __str__(self):
+        """返回操作符的字符串表示"""
+        return self.name.lower()
 
 class ExpressionNode(ExprASTNode):
     """表达式节点"""
@@ -109,17 +118,20 @@ class LiteralNode(ExprASTNode):
     ):
         super().__init__(source)
         self.value = value
-        self.data_type = self._infer_type(value)
+        self.data_type: Type = self._infer_type(value)
 
-    def _infer_type(self, value) -> str:
+    def _infer_type(self, value) -> Type:
         """推断字面量类型"""
         if isinstance(value, str):
-            return "string"
+            return str
         if isinstance(value, bool):
-            return "boolean"
-        if isinstance(value, (int, float)):
-            return "number"
-        return "unknown"
+            return bool
+        if isinstance(value, int):
+            return int
+        if isinstance(value, float):
+            return float
+        return str
+        # return "unknown"
 
     def accept(self, visitor: "ExprASTVisitor"):
         return visitor.visit_literal(self)
@@ -135,7 +147,8 @@ class ExprASTParser:
         if isinstance(data, dict):
             return self._parse_dict(data)
         elif isinstance(data, list):
-            return self._parse_list(data)
+            raise ValueError("列表类型数据不支持直接解析为ExprAST节点")
+            # return self._parse_list(data)
         else:
             return LiteralNode(data)
 
@@ -149,8 +162,20 @@ class ExprASTParser:
             return self._parse_function(data)
         elif node_type == "expression":
             return self._parse_expression(data)
+        elif node_type == "literal":
+            return self._parse_literal(data)
         else:
             raise ValueError(f"未知节点类型: {node_type}")
+
+    def _parse_literal(self, data: Dict) -> LiteralNode:
+        """解析字面量节点"""
+        value = data.get("args", [None])[0]  # 默认取第一个参数作为值
+
+        if value is None:
+            raise ValueError("字面量节点缺少value字段")
+
+        # 直接使用字面量值创建节点
+        return LiteralNode(value, source=data)
 
     def _parse_xpath(self, data: Dict) -> XPathNode:
         """解析XPath节点"""
@@ -166,41 +191,30 @@ class ExprASTParser:
             raise ValueError("函数节点必须至少有一个参数（函数名）")
 
         # 第一个参数是函数名
-        func_name = self._parse_function_name(args[0])
+        func_name = args[0]
 
         # 解析函数参数
         parsed_args = [self.parse(arg) for arg in args[1:]]
 
         return FunctionNode(func_name, parsed_args, source=data)
 
-    def _parse_function_name(self, name_data) -> str:
-        """解析函数名，支持字符串或变量引用"""
-        if isinstance(name_data, str):
-            return name_data
-        elif isinstance(name_data, dict) and name_data.get("type") == "variable":
-            return name_data["name"]
-        else:
-            raise ValueError(f"无效的函数名格式: {name_data}")
-
     def _parse_expression(self, data: Dict) -> ExpressionNode:
         """解析表达式节点"""
-        operator = data.get("operator")
-        if not operator:
-            raise ValueError("表达式节点缺少operator字段")
-
         args = data.get("args", [])
-        parsed_operands = [self.parse(arg) for arg in args]
 
-        return ExpressionNode(operator, parsed_operands, source=data)
+        if not args:
+            raise ValueError("表达式节点必须有操作符和操作数")
 
-    def _parse_list(self, data: list) -> ExprASTNode:
-        """解析列表（视为隐式表达式）"""
-        # 如果列表中只有一个元素，直接解析该元素
-        if len(data) == 1:
-            return self.parse(data[0])
-
-        # 多个元素视为隐式连接表达式
-        return ExpressionNode("concat", [self.parse(item) for item in data])
+        # 第一个参数是操作符
+        operator_str = args[0]
+        # 剩余参数是操作数
+        operands = args[1:]
+        
+        return ExpressionNode(
+            operator=operator_str,
+            operands=[self.parse(op) for op in operands],
+            source=data,
+        )
 
 
 class ExprASTVisitor(Protocol):
@@ -230,7 +244,6 @@ class ExprPrintVistor(ExprASTVisitor):
 
     def visit_function(self, node: FunctionNode) -> str:
         func_handler = self.resolver.get_handler(node.name)
-        # TODO:需要递归调用子节点visit!
         if func_handler:
             return func_handler(*[arg.accept(self) for arg in node.args])
         else:
@@ -238,34 +251,11 @@ class ExprPrintVistor(ExprASTVisitor):
             return f"{node.name}({args_str})"
 
     def visit_expression(self, node: ExpressionNode) -> str:
-        # 处理特殊运算符
-        if node.operator == "concat":
-            return "".join(op.accept(self) for op in node.operands)
+        return f"({str(node.operator).join(str(op.accept(self)) for op in node.operands)})"
 
-        # 处理二元运算符
-        if len(node.operands) >= 2:
-            left = self._maybe_parenthesize(node.operands[0])
-            right = self._maybe_parenthesize(node.operands[1])
-            return f"{left} {node.operator} {right}"
-
-        # 处理一元运算符
-        if len(node.operands) == 1:
-            operand = self._maybe_parenthesize(node.operands[0])
-            return f"{node.operator} {operand}"
-
-        # 默认处理：用操作符连接所有操作数
-        return f" {node.operator} ".join(op.accept(self) for op in node.operands)
-
-    def _maybe_parenthesize(self, node: ExprASTNode) -> str:
-        """根据需要为子表达式添加括号"""
-        result = node.accept(self)
-        if isinstance(node, ExpressionNode):
-            return f"({result})"
-        return result
-
-    def visit_literal(self, node: LiteralNode) -> str:
+    def visit_literal(self, node: LiteralNode) -> Union[str, int, float, bool]:
         # 根据类型决定是否添加引号
-        return str(node.value)
+        return node.data_type(node.value)
 
 
 # class ExprValidater(ExprASTVisitor):

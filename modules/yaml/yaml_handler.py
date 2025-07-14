@@ -109,7 +109,7 @@ class YamlDataTreeHandler(DataHandler):
         Raises:
             YamlConfigError: 配置验证失败
         """
-        self.config = YamlConfig.validate(config)
+        self.config: YamlConfig = YamlConfig.validate(config)
         self._node_paths: List[str] = []  # 用于检测循环引用
         # self._path_mapping: Dict[str, DataNode] = {}  # 文件路径到数据节点的映射
 
@@ -183,7 +183,9 @@ class YamlDataTreeHandler(DataHandler):
         for node in found_node:
             if isinstance(node, FileNode):
                 # Get data node from mapping
-                result.append(self._data_node_mapping.get(node))
+                data_node = self._data_node_mapping.get(node)
+                if data_node:
+                    result.append(data_node)
         return result
 
     def _data_node_create(self, file_node: FileNode, depth: int) -> DataNode:
@@ -204,15 +206,15 @@ class YamlDataTreeHandler(DataHandler):
             raise YamlStructureError.max_depth_exceeded(
                 self.config.max_depth, file_node.name
             )
-        # TODO: 将DataNode与FileNode建立映射，以便进行文件级别的find_pattern
+            
         file_system_path: str = str(
             self.config.root_path
         ) + file_node.get_absolute_path(slice_range=(1, None))
+        
         data = _YamlFileHandler._load_yaml_file(file_system_path)
         if data:
             # 创建数据节点并存入映射
             data_node = DataNode(data=data, name=file_node.name)
-            # self._path_mapping[file_node.get_absolute_path()] = data_node
 
             # Add data node to file node mapping
             self._add_mapping(data_node, file_node)
@@ -224,6 +226,7 @@ class YamlDataTreeHandler(DataHandler):
 
             # 处理子节点
             children_path = data_node.data[self.preserved_children_key]
+            
             if children_path == "":  # 空字符串视为空列表
                 children_path = []
             if children_path:
@@ -232,28 +235,46 @@ class YamlDataTreeHandler(DataHandler):
                 elif isinstance(children_path, list):
                     pass  # 已经是列表
 
-                # 为每个模式创建子节点
-                for pattern in children_path:
-                    if not pattern:  # 跳过空模式
+                # 为每个模式创建子节点, 同时将他们分组
+                for paths in children_path:
+                    if not paths:  # 跳过空路径
                         continue
-                    if file_node.parent:
-                        matching_files = cast(
-                            DirectoryNode, file_node.parent
-                        ).find_nodes_by_path(pattern)
-                        for matching_file in matching_files:
-                            if isinstance(matching_file, FileNode):
-                                try:
-                                    child_node = self._data_node_create(
-                                        matching_file, depth + 1
-                                    )
-                                    data_node.add_child(child_node)
-                                except YamlError as e:
-                                    # 重新抛出异常，添加子节点处理失败的上下文
-                                    raise YamlStructureError(
-                                        e.error_type,
-                                        f"Error processing child {matching_file.name}: {str(e)}",
-                                        str(matching_file.get_absolute_path()),
-                                    ) from e
+                    patterns = []
+                    if isinstance(paths, str):
+                        patterns = [pattern]
+                    elif isinstance(paths, list):
+                        patterns = pattern
+                    else:
+                        raise YamlStructureError.invalid_children(
+                            f"Invalid children path specification: {paths}",
+                            file_system_path,
+                        )
+                    current_group_number = 0
+                    for pattern in patterns:
+                        if not pattern:  # 跳过空模式
+                            continue
+                        if file_node.parent:
+                            matching_files = cast(
+                                DirectoryNode, file_node.parent
+                            ).find_nodes_by_path(pattern)
+                            for matching_file in matching_files:
+                                if isinstance(matching_file, FileNode):
+                                    try:
+                                        child_node = self._data_node_create(
+                                            matching_file, depth + 1
+                                        )
+                                        data_node.add_child(child_node)
+                                        current_group_number += 1
+                                    except YamlError as e:
+                                        # 重新抛出异常，添加子节点处理失败的上下文
+                                        raise YamlStructureError(
+                                            e.error_type,
+                                            f"Error processing child {matching_file.name}: {str(e)}",
+                                            str(matching_file.get_absolute_path()),
+                                        ) from e
+                    # 记录当前组的数量
+                    self.group_number.append(current_group_number)
+                                        
         else:
             raise YamlLoadError(f"Failed to load data", file_system_path)
         return data_node

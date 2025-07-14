@@ -10,6 +10,7 @@ from typing import (
     Iterator,
     runtime_checkable,
     Callable,
+    Type
 )
 from pathlib import Path
 from ..node.data_node import DataNode
@@ -49,7 +50,27 @@ class DataHandler(Protocol):
             str: 用于在数据中标识模板路径的键名
         """
         ...
+    @property
+    def preserved_children_key(self) -> str:
+        """子节点的键名
 
+        Returns:
+            str: 用于在数据中标识子节点的键名
+        """
+        ...
+        
+    def get_children_group(self, pattern: str) -> List[DataNode]:
+        """根据文件路径模式查找数据节点
+
+        Args:
+            pattern: 文件路径模式，如 "*.yaml" 或 "**/config/*.yaml"
+
+        Returns:
+            Iterator[DataNode]: 匹配的数据节点迭代器
+        """
+        ...
+
+        
     def create_data_tree(self, pattern: str) -> List[DataNode]:
         """从指定模式创建数据树
 
@@ -91,15 +112,24 @@ class DataHandler(Protocol):
 class TemplateHandler(Protocol):
     """Protocol for template handlers"""
 
+    # @property
+    # def preserved_children_key_prefix(self) -> str:
+    #     """子节点的键名前缀, 用于在模板中所使用的标记子节点内容位置
+
+    #     Returns:
+    #         str: 用于在数据中标识子节点的键名
+    #     """
+    #     ...
+        
     @property
-    def config(self) -> Any:
-        """Get handler configuration
+    def preserved_children_key(self) -> str:
+        """子节点的键名, 用于在模板中所使用的标记子节点内容位置
 
         Returns:
-            Any: Handler configuration containing preserved_children_key
+            str: 用于在数据中标识子节点的键名
         """
         ...
-
+        
     def render_template(
         self, template_path: str, node: DataNode, data_handler: DataHandler
     ) -> str:

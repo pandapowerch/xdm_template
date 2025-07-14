@@ -17,7 +17,8 @@ class DataNode(DirectoryNode["DataNode"]):
     ):
         super().__init__(name, parent)
         self.data: Dict[str, Any] = data
-
+        self.children_group_number: List[int] = [] # 记录子节点组的数量
+        
     def serialize_tree(self, indent: int = 0) -> str:
         """Serialize the data node to a dictionary representation."""
         return f"""
