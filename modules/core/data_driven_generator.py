@@ -107,28 +107,30 @@ class DataDrivenGenerator:
         data = node.data
 
         # 4. 收集子节点渲染结果
-        children_content: Union[List[str], Dict[str, str], str] = []
         
+        print(f"Processing node: {node.name} with children{node.children_group_number}: {[child.name for child in node.children]}")        
         
-        for child in node.children:
-            if isinstance(child, DataNode) and child in self._rendered_contents:
-                children_content.append(self._rendered_contents[child])
+        # 给子节点编号?
+        current_children_index = 0
+        for group_index, group_number in enumerate(node.children_group_number):
+            children_content: Union[List[str], str] = []
+            print(f"    Processing group {group_index}: {group_number}")
+            # 从children中取number个子节点
+            for child_index in range(current_children_index, current_children_index + group_number):
+                if child_index < len(node.children):
+                    child = node.children[child_index]
+                    if isinstance(child, DataNode) and child in self._rendered_contents:
+                        children_content.append(self._rendered_contents[child])
 
-        # 5. 添加子节点内容到上下文
-        data[self.template_handler.preserved_children_key] = "\n".join(
-            children_content
-        )
+            # 5. 添加子节点内容到上下文
+            data[self.template_handler.preserved_children_key + str(group_index)] = "\n".join(
+                children_content
+            )
+            # 更新当前子节点索引
+            current_children_index += group_number
 
         try:
             template_path = node.data[self.data_handler.preserved_template_key]
-            # Dynamic create resolver for DataNode
-            # node_resolver = self._create_node_resolver(node)
-
-            # from ..jinja.expr_filter import expr_filter_factory
-
-            # Currently only create expr filter
-            # TODO: Maybe need extent?
-            # filters = {"expr_filter": expr_filter_factory(node_resolver)}
 
             # 6. 渲染模板
             result = self.template_handler.render_template(

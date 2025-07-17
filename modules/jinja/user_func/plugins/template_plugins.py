@@ -1,3 +1,4 @@
+from modules.core import DataHandler
 from modules.jinja.user_func.func_handler import UserFunctionInfo
 from modules.jinja.user_func.resolver import FunctionPlugin
 from modules.node.data_node import DataNode
@@ -26,14 +27,18 @@ class MathUtilsPlugin(FunctionPlugin):
         ]
 
     @classmethod
-    def dynamic_functions(cls, node: DataNode) -> List[UserFunctionInfo]:
+    def dynamic_functions(
+        cls, node: DataNode, data_handler: DataHandler
+    ) -> List[UserFunctionInfo]:
         """动态数学函数（使用节点上下文）"""
         return [
             UserFunctionInfo(
                 name="math:node_value",
-                arg_range=(0, 0),
-                description="Get current node's numeric value",
-                handler=lambda: float(node.data.get("value", 0)),
+                arg_range=(1, 1),
+                description="Get node value by file_path",
+                handler=lambda file_path: float(
+                    data_handler.find_by_file_path(node, file_path)[0].data.get("value", 0)
+                ),
             ),
             UserFunctionInfo(
                 name="math:children_sum",

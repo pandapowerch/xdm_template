@@ -18,8 +18,8 @@ class FunctionPlugin:
         return []
 
     @classmethod
-    def dynamic_functions(cls, node: DataNode) -> List[UserFunctionInfo]:
-        """返回插件提供的动态函数列表（需要节点上下文）"""
+    def dynamic_functions(cls, node: DataNode, data_handler: DataHandler) -> List[UserFunctionInfo]:
+        """返回插件提供的动态函数列表（需要节点上下文以及节点树上下文）"""
         return []
 
     @classmethod
@@ -191,7 +191,7 @@ class UserFunctionResolverFactory:
         for plugin_class in self.plugin_classes:
             try:
                 # 获取插件的动态函数
-                funcs = plugin_class.dynamic_functions(node)
+                funcs = plugin_class.dynamic_functions(node, data_handler)
                 plugin_dynamic.extend(funcs)
             except Exception as e:
                 print(

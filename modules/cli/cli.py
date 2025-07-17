@@ -74,7 +74,7 @@ def load_config(file_path: str) -> Dict[str, Any]:
     except Exception as e:
         raise ValueError(f"Failed to parse config file: {str(e)}")
 
-def save_output(output_dir: str, results: Dict[str, str]) -> None:
+def save_output(output_dir: str, results: Dict[str, str], file_extension: str='txt') -> None:
     """保存渲染结果到文件
     
     Args:
@@ -85,7 +85,7 @@ def save_output(output_dir: str, results: Dict[str, str]) -> None:
     out_path.mkdir(parents=True, exist_ok=True)
     
     for name, content in results.items():
-        file_path = out_path / f"{name}.xml"
+        file_path = out_path / f"{name}.{file_extension}"
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
         print(f"Generated: {file_path}")
@@ -162,7 +162,7 @@ output_dir: path/to/output
             results = generator.render(pattern)
             
             # 6. 保存结果
-            save_output(config['output_dir'], results)
+            save_output(config['output_dir'], results, file_extension=config.get('output_file_extension', 'txt'))
             
     except (ValueError, GeneratorError) as e:
         print(f"Error: {str(e)}", file=sys.stderr)

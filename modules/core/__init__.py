@@ -59,17 +59,6 @@ class DataHandler(Protocol):
         """
         ...
         
-    def get_children_group(self, pattern: str) -> List[DataNode]:
-        """根据文件路径模式查找数据节点
-
-        Args:
-            pattern: 文件路径模式，如 "*.yaml" 或 "**/config/*.yaml"
-
-        Returns:
-            Iterator[DataNode]: 匹配的数据节点迭代器
-        """
-        ...
-
         
     def create_data_tree(self, pattern: str) -> List[DataNode]:
         """从指定模式创建数据树

@@ -241,16 +241,17 @@ class YamlDataTreeHandler(DataHandler):
                         continue
                     patterns = []
                     if isinstance(paths, str):
-                        patterns = [pattern]
+                        patterns = [paths]
                     elif isinstance(paths, list):
-                        patterns = pattern
+                        patterns = paths
                     else:
                         raise YamlStructureError.invalid_children(
                             f"Invalid children path specification: {paths}",
                             file_system_path,
                         )
-                    current_group_number = 0
+                    # 处理每个模式
                     for pattern in patterns:
+                        current_group_number = 0
                         if not pattern:  # 跳过空模式
                             continue
                         if file_node.parent:
@@ -272,8 +273,7 @@ class YamlDataTreeHandler(DataHandler):
                                             f"Error processing child {matching_file.name}: {str(e)}",
                                             str(matching_file.get_absolute_path()),
                                         ) from e
-                    # 记录当前组的数量
-                    self.group_number.append(current_group_number)
+                        data_node.children_group_number.append(current_group_number)
                                         
         else:
             raise YamlLoadError(f"Failed to load data", file_system_path)

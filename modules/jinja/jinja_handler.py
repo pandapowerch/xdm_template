@@ -1,4 +1,10 @@
-from jinja2 import Environment, FileSystemLoader, Template, pass_context
+from jinja2 import (
+    Environment,
+    FileSystemLoader,
+    Template,
+    pass_context,
+    StrictUndefined,
+)
 from typing import Dict, Any, Callable, Optional
 from dataclasses import dataclass
 from pathlib import Path
@@ -70,6 +76,7 @@ class JinjaTemplateHandler:
             trim_blocks=True,  # 移除块级标签后的第一个换行
             lstrip_blocks=True,  # 移除块级标签前的空白
             keep_trailing_newline=True,  # 保留文件末尾的换行
+            undefined=StrictUndefined,  # 严格模式，未定义变量会抛出错误
         )
         from ..jinja.user_func.resolver import UserFunctionResolverFactory
 
